@@ -8,6 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,21 +20,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Color.Companion.LightGray
 import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.graphics.Color.Companion.White
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import com.asalcedo.recipes.data.Recipe
 import com.asalcedo.recipes.data.strawberryCake
 import com.asalcedo.recipes.ui.AppBarCollapsedHeight
 import com.asalcedo.recipes.ui.AppBarExpendedHeight
 import com.asalcedo.recipes.ui.theme.*
+import com.google.accompanist.insets.LocalWindowInsets
+import kotlin.math.max
+import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,24 +62,40 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainFragment(recipe: Recipe) {
+    val scrollState = rememberLazyListState()
     Box {
-        Content(recipe)
-        ParallaxToolbar(recipe)
+        Content(recipe, scrollState)
+        ParallaxToolbar(recipe, scrollState)
     }
 }
 
 @Composable
-fun ParallaxToolbar(recipe: Recipe) {
+fun ParallaxToolbar(recipe: Recipe, scrollState: LazyListState) {
     val imageHeight = AppBarExpendedHeight - AppBarCollapsedHeight
+    val maxOffset =
+        with(LocalDensity.current) { imageHeight.roundToPx() } - LocalWindowInsets.current.systemBars.layoutInsets.top
+
+    val offset = min(scrollState.firstVisibleItemScrollOffset, maxOffset)
+
+    val offsetProgress = max(0f, offset * 3f - 2f * maxOffset) / maxOffset
+
     TopAppBar(
         contentPadding = PaddingValues(),
         backgroundColor = White,
-        modifier = Modifier.height(
-            AppBarExpendedHeight
-        )
+        modifier = Modifier
+            .height(
+                AppBarExpendedHeight
+            )
+            .offset { IntOffset(x = 0, y = -offset) },
+        elevation = if (offset == maxOffset) 4.dp else 0.dp
     ) {
         Column {
-            Box(Modifier.height(imageHeight)) {
+            Box(
+                Modifier
+                    .height(imageHeight)
+                    .graphicsLayer {
+                        alpha = 1f - offsetProgress
+                    }) {
                 Image(
                     painter = painterResource(id = R.drawable.strawberry_pie_1),
                     contentDescription = null,
@@ -115,7 +140,9 @@ fun ParallaxToolbar(recipe: Recipe) {
                     text = recipe.title,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier
+                        .padding(horizontal = (16 + 28 * offsetProgress).dp)
+                        .scale(1f - 0.25f * offsetProgress)
                 )
             }
         }
@@ -160,28 +187,135 @@ fun CircularButton(
 }
 
 @Composable
-fun Content(recipe: Recipe) {
-    LazyColumn(contentPadding = PaddingValues(top = AppBarExpendedHeight)) {
+fun Content(recipe: Recipe, scrollState: LazyListState) {
+    LazyColumn(contentPadding = PaddingValues(top = AppBarExpendedHeight), state = scrollState) {
         item {
             BasicInfo(recipe)
             Description(recipe)
             ServingCalculator()
             IngredientsHeader()
-            IngredientsList()
+            IngredientsList(recipe)
+            ShoppingListButton()
+            Reviews(recipe)
+            Images()
         }
     }
 }
 
 @Composable
-fun IngredientsList() {
-    IngredientCard(R.drawable.mind)
+fun Images() {
+    Row(
+        modifier = Modifier
+            .padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.strawberry_pie_2),
+            contentDescription = null,
+            modifier = Modifier
+                .weight(1f)
+                .clip(Shapes.small)
+        )
+        Spacer(modifier = Modifier.weight(0.1f))
+        Image(
+            painter = painterResource(id = R.drawable.strawberry_pie_3),
+            contentDescription = null,
+            modifier = Modifier
+                .weight(1f)
+                .clip(Shapes.small)
+        )
+    }
+}
+
+
+@Composable
+fun Reviews(recipe: Recipe) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column() {
+            Text(text = "Reviews", fontWeight = FontWeight.Bold)
+            Text(text = recipe.reviews, color = com.asalcedo.recipes.ui.theme.DarkGray)
+        }
+        Button(
+            onClick = { /*TODO*/ },
+            elevation = null,
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = com.asalcedo.recipes.ui.theme.Transparent,
+                contentColor = Pink
+            )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "See all")
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_arrow_right),
+                    contentDescription = null
+                )
+            }
+
+        }
+    }
 }
 
 @Composable
-fun IngredientCard(@DrawableRes iconResource: Int) {
+fun ShoppingListButton() {
+    Button(
+        onClick = { /*TODO*/ },
+        elevation = null,
+        shape = Shapes.small,
+        colors = ButtonDefaults.buttonColors(
+            backgroundColor = com.asalcedo.recipes.ui.theme.LightGray,
+            contentColor = Color.Black
+        ), modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Text(text = "Add to shopping list", modifier = Modifier.padding(8.dp))
+    }
+}
+
+@Composable
+fun IngredientsList(recipe: Recipe) {
+    EasyGrid(nColumns = 3, items = recipe.ingredients) {
+        IngredientCard(it.image, it.title, it.subtitle, Modifier)
+    }
+}
+
+@Composable
+fun <T> EasyGrid(nColumns: Int, items: List<T>, content: @Composable (T) -> Unit) {
+    Column(Modifier.padding(16.dp)) {
+        for (i in items.indices step nColumns) {
+            Row {
+                for (j in 0 until nColumns) {
+                    if (i + j < items.size) {
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            content(items[i + j])
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f, fill = true))
+                    }
+                }
+
+            }
+        }
+    }
+}
+
+@Composable
+fun IngredientCard(
+    @DrawableRes iconResource: Int,
+    title: String,
+    subtitle: String,
+    modifier: Modifier
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(bottom = 16.dp)
+        modifier = modifier.padding(bottom = 16.dp)
     ) {
         Card(
             shape = Shapes.large,
@@ -191,8 +325,19 @@ fun IngredientCard(@DrawableRes iconResource: Int) {
                 .height(100.dp)
                 .padding(8.dp)
         ) {
-            Image(painter = painterResource(id = iconResource), contentDescription = null)
+            Image(
+                painter = painterResource(id = iconResource),
+                contentDescription = null,
+                modifier = Modifier.padding(16.dp)
+            )
         }
+        Text(
+            text = title,
+            modifier = Modifier.width(100.dp),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Text(text = subtitle, color = DarkGray, modifier = Modifier.width(100.dp), fontSize = 14.sp)
     }
 }
 
